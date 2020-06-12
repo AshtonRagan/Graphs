@@ -1,4 +1,5 @@
 import random
+import queue
 
 
 class User:
@@ -47,7 +48,7 @@ class SocialGraph:
         self.friendships = {}
         # Add users
         for i in range(0, num_users):
-            self.users = f"User {i}"
+            self.users[i] = User(f'User{i}')
         # Create Frienships
         # Generate all possible friendship combinations
             possible_friendships = []
@@ -75,6 +76,16 @@ class SocialGraph:
         """
         visited = {}  # Note that this is a dictionary, not a set
         # !!!! IMPLEMENT ME
+        q = queue.Queue()
+        q.enqueue([user_id])
+        while q.size() > 0:
+            path = q.dequeue()
+            v = path[-1]
+            if v not in visited:
+                visited[v] = path
+                for n in self.friendships[v]:
+                    # makes copy of path and adds n to it
+                    q.enqueue(path + [n])
         return visited
 
 
