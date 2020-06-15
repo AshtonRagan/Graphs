@@ -1,6 +1,7 @@
 from room import Room
 from player import Player
 from world import World
+from util import Stack, opp_dir, bfs
 
 import random
 from ast import literal_eval
@@ -27,150 +28,127 @@ player = Player(world.starting_room)
 
 # Fill this out with directions to walk
 # traversal_path = ['n', 'n']
-# `player.current_room.id`
-# `player.current_room.get_exits()`
-# `player.travel(direction)`
 traversal_path = []
+"""
+Understand
+----------
+Traverse entire graph (undirected and unweighted with cycles; not disjoint)
+Construct traversal graph for traversal_path, a list of moves
+{
+    0: {'n': 4, 's': '?', 'e': '?'}
+}
+This representation is an adjacency dict - { room: { direction: neighbor } }
+Complete traversal is 500 entries and no '?'
+Traverse entire subgraph, then backtrack (unless 500 entries)
+Helper function to convert path to n/s/e/w directions
+Tricolor algorithm
+- White nodes are undiscovered (not in dict)
+- Gray nodes are discovered but not explored (in dict, has '?')
+- Black nodes are explored (in dict, no '?')
+- White --> gray --> black
+- There should be no edges from white nodes to black nodes
+Color root node gray
+While gray node x exists
+    Color white successors of x gray
+    If x has no successors left, paint it black
+If a gray loop is visited, there is a cycle
+When you add an adjacency, the mutual one can be added
+Ideas:
+DFT to traverse subgraph of a single node
+BFS to find nearest unexplored node
+To minimize backtracking, maximize distance from root (heuristic)
+"Manhattan distance" is |cell_x - exit_x| + |cell_y - exit_y|
+Store current root node being explored
+Plan
+----------
+Visit root node and push onto stack
+While stack is not empty or traversal_graph < 500 entries:
+    Pop unexplored root node from stack
+    DFT explore using heuristic, adding unexplored nodes to stack
+    Backtrack to nearest gray node if dead end
+"""
+print('\n=================================================================\n')
+player.current_room = world.starting_room  # reset
 
+s = Stack()  # stores unexplored nodes as (origin, move)
+traversal_graph = dict()
+explored = set()
 
-def past_room(dir):
-    if dir.lower() == "n":
-        return "s"
-    if dir.lower() == "w":
-        return "e"
-    if dir.lower() == "e":
-        return "w"
-    if dir.lower() == "s":
-        return "n"
+# seed stack
+traversal_graph[player.current_room.id] = dict()
 
+for direction in player.current_room.get_exits():
+    traversal_graph[player.current_room.id][direction] = '?'
+    s.push((player.current_room.id, direction))
 
-visted = {}
+curr_unexplored = None
 
+while s.size() > 0:
+    origin, move = s.pop()
 
-def treversal():
+    if player.current_room.id != origin:
+        # need to backtrack
+        print(f'{player.current_room.id} is not {origin}. Time to backtrack!')
+        path = bfs(player.current_room.id, origin, traversal_graph)
 
-    cur_id = world.starting_room.id
-    cur_dir = ""
-    count = 0
-    # len(room_graph)
-    while len(visted) != len(room_graph):
-        # while count >= 0:
-        count += 1
-        print("Count: ", count)
-        if count >= 2000:
-            return print("Failed")
+        # turn path into directional moves
+        for room in path[1:]:
+            # swap directions and rooms
+            swapped = {value: key for key, value in
+                       traversal_graph[player.current_room.id].items()}
 
-        prev_id = cur_id
-        cur_id = player.current_room.id
-        # if room has not been visted, add it to visited
+            player.travel(swapped[room], True)
+            traversal_path.append(swapped[room])
 
-        # print("=---------------------------------------------=")
-        # print("Current Room Id: ", cur_id)
-        # print("Prev Room Id: ", prev_id)
+    player.travel(move, False)
+    traversal_path.append(move)
 
-        if cur_id not in visted:
-            room_exits = {}
-            for room in player.current_room.get_exits():
-                room_exits[room] = "?"
-            visted[cur_id] = room_exits
+    if player.current_room.id not in traversal_graph:
+        traversal_graph[player.current_room.id] = {
+            direction: '?' for direction in player.current_room.get_exits()}
 
-            # set the directions we visted
-            if cur_id != world.starting_room.id:
-                # change pre dir to our id
-                if cur_dir in visted[prev_id]:
-                    if visted[prev_id][cur_dir] == "?":
-                        visted[prev_id][cur_dir] = cur_id
-                if past_room(cur_dir) in visted[cur_id]:
-                    if visted[cur_id][past_room(cur_dir)] == "?":
-                        visted[cur_id][past_room(cur_dir)] = prev_id
+    if player.current_room.id not in explored:
+        traversal_graph[origin][move] = player.current_room.id
+        traversal_graph[player.current_room.id][opp_dir(move)] = origin
 
-        # print("Cur_dur: ", cur_dir)
-        # print("Visted: ")
-        # for i in visted:
-        #     print(i, visted[i])
+        # check if origin or current are now explored
+        if '?' not in traversal_graph[origin].values():
+            explored.add(origin)
 
-        # move
-        # pick a direction to go
-        if cur_id == world.starting_room.id:
-            if prev_id != cur_id:
-                # print("HERE")
-                # changeing the pre ids to  cur id dir
-                if cur_dir in visted[prev_id]:
-                    if visted[prev_id][cur_dir] == "?":
-                        visted[prev_id][cur_dir] = cur_id
-                        # changeing cur oppiste dir to pre id
-                if past_room(cur_dir) in visted[cur_id]:
-                    if visted[cur_id][past_room(cur_dir)] == "?":
-                        visted[cur_id][past_room(cur_dir)] = prev_id
-            for key in visted[cur_id]:
-                if visted[cur_id][key] == "?":
-                    cur_dir = key
-            else:
-                if visted[cur_id][cur_dir] != "?":
-                    player.travel(past_room(cur_dir))
-
-            # print("Cur_dur: ", cur_dir)
-
-        if player.can_travel(cur_dir):
-            for key in visted[cur_id]:
-                if visted[cur_id][key] == "?":
-                    cur_dir = key
-            print("Bing!")
-            traversal_path.append(cur_dir)
-            player.travel(cur_dir)
+        if '?' not in traversal_graph[player.current_room.id].values():
+            explored.add(player.current_room.id)
         else:
-            print("Fizz")
-            copy = cur_dir
-            # check if there are other directions we can go
-            # if there is not then backtrack till there is
-            for key in visted[cur_id]:
-                if visted[cur_id][key] == "?":
-                    cur_dir = key
-                else:
-                    if visted[cur_id][key] != prev_id:
-                        cur_dir = key
-            # check if we found ?
-            if copy == cur_dir:
-                # no "?"
+            neighbors = {}
 
-                cur_dir = past_room(cur_dir)
-                player.travel(cur_dir)
-            else:
-                player.travel(cur_dir)
-            print(visted)
+            for direction, room in traversal_graph[player.current_room.id].items():
+                if room == '?':
+                    distance = abs(player.current_room.get_coords()[
+                        0] - 3) + abs(player.current_room.get_coords()[0] - 5)
 
-        # print("=---------------------------------------------=\n")
-        # move from room to room
-        # add to our treversal path
-        # mark each room as visted
-        # goto new room
-        # if we reach a room with no exits or
-        # a room with all ajc-rooms visted
-        # we need to back track till we find an unexplored path
+                    neighbors[(player.current_room.id, direction)] = distance
 
+            sorted_neighbors = sorted(neighbors.items(), reverse=True)
 
-# treversal()
-# print(f"Treversal: ", traversal_path)
+            for neighbor in sorted_neighbors:
+                s.push(neighbor[0])
 
-# TRAVERSAL TEST
+# print(f'final path: {traversal_path}')
+# print(f'final dict: {traversal_graph}')
+print(f'stopped at: {player.current_room.id}')
+print('\n=================================================================\n')
+
+# TRAVERSAL TEST - DO NOT MODIFY
 visited_rooms = set()
 player.current_room = world.starting_room
 visited_rooms.add(player.current_room)
-treversal()
-
-print(f"Treversal: ", traversal_path)
-print("LEN!!: ", len(visted))
 
 for move in traversal_path:
     player.travel(move)
     visited_rooms.add(player.current_room)
 
-
-print("LEN-R-GRAPH: ", len(room_graph))
-
-if len(visted) == len(room_graph):
+if len(visited_rooms) == len(room_graph):
     print(
-        f"TESTS PASSED: {len(traversal_path)} moves, {len(visted)} rooms visited")
+        f"TESTS PASSED: {len(traversal_path)} moves, {len(visited_rooms)} rooms visited")
 else:
     print("TESTS FAILED: INCOMPLETE TRAVERSAL")
     print(f"{len(room_graph) - len(visited_rooms)} unvisited rooms")
